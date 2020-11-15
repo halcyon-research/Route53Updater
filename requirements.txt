@@ -1,0 +1,6 @@
+toml
+boto3
+requests
+tabulate
+colorama
+pyfiglet

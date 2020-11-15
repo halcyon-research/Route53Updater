@@ -1,0 +1,9 @@
+# domain list for update.py
+
+title = "default domains"
+
+domains = [
+    "testdomain.com",
+    "example.org",
+    "newdomain.dev"
+]
