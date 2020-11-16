@@ -130,26 +130,19 @@ def printRoute53Matches():
     reset()
 
 
-def updateMatchesOnRoute53(ip, prev_ip):
-    if ip == prev_ip:
-        return "skip"
-    else:
-        for match in matches:
-            r53response = update_record(match[1], match[0], ip)
-        return r53response
+def updateMatchesOnRoute53(ip):
+    for match in matches:
+        r53response = update_record(match[1], match[0], ip)
+    return r53response
 
 
-def printUpdatesOnRoute53(r53response, ip):
-    if r53response == "skip":
-        yellow("previous IP match, SKIPPING")
-        reset()
-    else:
-        for match in matches:
-            if r53response["ChangeInfo"]["Status"] == "PENDING":
-                yellow("PENDING (" + ip + "): " + match[0])
-            else:
-                pass
-        reset()
+def printUpdatesOnRoute53(r53response):
+    for match in matches:
+        if r53response["ChangeInfo"]["Status"] == "PENDING":
+            yellow("PENDING (" + ip + "): " + match[0])
+        else:
+            pass
+    reset()
 
 
 def saveTOML(data, ip, time):
@@ -157,6 +150,13 @@ def saveTOML(data, ip, time):
     data["time"] = time
     with open(CONFIG, "w") as f:
         toml.dump(data, f)
+
+
+def checkPrevIP(ip, prev_ip):
+    if ip == prev_ip:
+        return True
+    else:
+        return False
 
 
 if __name__ == "__main__":
@@ -168,17 +168,23 @@ if __name__ == "__main__":
     prev_ip = data["ip"]
 
     printTitle(curr_time)
-    groupHostedZones()
-    generateRoute53Matches()
-    if VERBOSE:
-        printRoute53Records()
-        printRoute53Matches()
-    else:
-        print()
 
-    saveTOML(data, ip, curr_time)
-    if LIVE:
-        printUpdatesOnRoute53(updateMatchesOnRoute53(ip, prev_ip), ip)
+    if not checkPrevIP(ip, prev_ip):
+
+        groupHostedZones()
+        generateRoute53Matches()
+        if VERBOSE:
+            printRoute53Records()
+            printRoute53Matches()
+        else:
+            print()
+
+        saveTOML(data, ip, curr_time)
+        if LIVE:
+            printUpdatesOnRoute53(updateMatchesOnRoute53(ip), ip)
+        else:
+            yellow("testing mode")
+            reset()
     else:
-        yellow("testing mode")
+        yellow("\nprevious IP match, SKIPPING")
         reset()
