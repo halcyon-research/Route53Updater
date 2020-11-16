@@ -2,19 +2,21 @@
 # Route53 Updater, v1.0
 # 11.14.20
 
-import toml
+from toml import load
 import requests
 import boto3
 from tabulate import tabulate
 from colorama import Fore, Style
 from pyfiglet import Figlet
+from datetime import datetime
 
 AWS_IP_SERVICE = "http://checkip.amazonaws.com"
 COLORS = True
 LIVE = True
 FANCY = True
+VERBOSE = True
 
-data = toml.load("domains.toml")
+data = load("domains.toml")
 client = boto3.client("route53")
 resp = client.list_hosted_zones()
 
@@ -23,33 +25,35 @@ def title(fancy):
     if fancy:
         f = Figlet(font="slant")
         print(f.renderText("R53 U"), end="")
+        print(datetime.now().isoformat() + "\n")
     else:
-        print("\nRoute53 Updater, by michaelpeterswa\n")
+        print("Route53 Updater, by michaelpeterswa")
+        print(datetime.now().isoformat() + "\n")
 
 
-def green(text, colors):
-    if colors:
+def green(text):
+    if COLORS:
         print(Fore.GREEN + text)
     else:
         print(text)
 
 
-def yellow(text, colors):
-    if colors:
+def yellow(text):
+    if COLORS:
         print(Fore.YELLOW + text)
     else:
         print(text)
 
 
-def red(text, colors):
-    if colors:
+def red(text):
+    if COLORS:
         print(Fore.RED + text)
     else:
         print(text)
 
 
-def reset(colors):
-    if colors:
+def reset():
+    if COLORS:
         print(Style.RESET_ALL)
     else:
         print()
@@ -95,11 +99,13 @@ for z in resp["HostedZones"]:
     ids.append(z["Id"])
     records.append((z["Name"][:-1], z["Id"]))
 
-yellow("", COLORS)
+yellow("")
 title(FANCY)
-print("Route53 Records:\n")
-print(tabulate({"Name": names, "ID": ids}, headers="keys"))
-reset(COLORS)
+
+if VERBOSE:
+    print("Route53 Records:\n")
+    print(tabulate({"Name": names, "ID": ids}, headers="keys"))
+    reset()
 
 ip = requests.get(AWS_IP_SERVICE).text.strip()
 
@@ -107,15 +113,21 @@ matches = []
 for link, ID in records:
     if link in data["domains"]:
         matches.append((link, ID))
-        green(("✔ found domain match: " + link), COLORS)
+        if VERBOSE:
+            green("✔ found domain match: " + link)
     else:
-        red(("✗ " + link + " was found on Route53 but not in domains"), COLORS)
+        if VERBOSE:
+            red("✗ " + link + " was found on Route53 but not in domains")
+if VERBOSE:
+    print()
 
-print()
 for match in matches:
     if LIVE:
         resp = update_record(match[1], match[0], ip)
-        if resp["ChangeInfo"]["Status"] == "PENDING":
-            yellow("PENDING (" + ip + "): " + match[0], COLORS)
-        else:
-            pass
+        if VERBOSE:
+            if resp["ChangeInfo"]["Status"] == "PENDING":
+                yellow("PENDING (" + ip + "): " + match[0])
+            else:
+                pass
+if VERBOSE:
+    reset()
