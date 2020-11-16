@@ -13,15 +13,11 @@ from pyfiglet import Figlet
 from datetime import datetime
 
 AWS_IP_SERVICE = "http://checkip.amazonaws.com"
+CONFIG = "domains.toml"
 COLORS = True
 LIVE = True
 FANCY = True
 VERBOSE = True
-
-data = toml.load("domains.toml")
-client = boto3.client("route53")
-resp = client.list_hosted_zones()
-ip = requests.get(AWS_IP_SERVICE).text.strip()
 
 names = []
 ids = []
@@ -29,14 +25,14 @@ records = []
 matches = []
 
 
-def title(fancy):
-    if fancy:
+def title(time):
+    if FANCY:
         f = Figlet(font="slant")
         print(f.renderText("R53 U"), end="")
-        print(datetime.now().isoformat())
+        print(time)
     else:
         print("\nRoute53 Updater, by michaelpeterswa")
-        print(datetime.now().isoformat())
+        print(time)
 
 
 def green(text):
@@ -106,10 +102,10 @@ def groupHostedZones():
         records.append((z["Name"][:-1], z["Id"]))
 
 
-def printTitle():
+def printTitle(time):
     if COLORS:
         print(Fore.YELLOW)
-    title(FANCY)
+    title(time)
 
 
 def printRoute53Records():
@@ -134,23 +130,44 @@ def printRoute53Matches():
     reset()
 
 
-def updateMatchesOnRoute53():
-    for match in matches:
-        r53response = update_record(match[1], match[0], ip)
-    return r53response
+def updateMatchesOnRoute53(ip, prev_ip):
+    if ip == prev_ip:
+        return "skip"
+    else:
+        for match in matches:
+            r53response = update_record(match[1], match[0], ip)
+        return r53response
 
 
-def printUpdatesOnRoute53(r53response):
-    for match in matches:
-        if r53response["ChangeInfo"]["Status"] == "PENDING":
-            yellow("PENDING (" + ip + "): " + match[0])
-        else:
-            pass
-    reset()
+def printUpdatesOnRoute53(r53response, ip):
+    if r53response == "skip":
+        yellow("previous IP match, SKIPPING")
+        reset()
+    else:
+        for match in matches:
+            if r53response["ChangeInfo"]["Status"] == "PENDING":
+                yellow("PENDING (" + ip + "): " + match[0])
+            else:
+                pass
+        reset()
+
+
+def saveTOML(data, ip, time):
+    data["ip"] = ip
+    data["time"] = time
+    with open(CONFIG, "w") as f:
+        toml.dump(data, f)
 
 
 if __name__ == "__main__":
-    printTitle()
+    data = toml.load(CONFIG)
+    client = boto3.client("route53")
+    resp = client.list_hosted_zones()
+    ip = requests.get(AWS_IP_SERVICE).text.strip()
+    curr_time = datetime.now().isoformat()
+    prev_ip = data["ip"]
+
+    printTitle(curr_time)
     groupHostedZones()
     generateRoute53Matches()
     if VERBOSE:
@@ -159,7 +176,9 @@ if __name__ == "__main__":
     else:
         print()
 
+    saveTOML(data, ip, curr_time)
     if LIVE:
-        printUpdatesOnRoute53(updateMatchesOnRoute53())
+        printUpdatesOnRoute53(updateMatchesOnRoute53(ip, prev_ip), ip)
     else:
-        print("testing mode")
+        yellow("testing mode")
+        reset()

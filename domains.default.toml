@@ -1,6 +1,8 @@
 # domain list for update.py
 
 title = "default domains"
+time = "2020-11-15T12:00:00.000000"
+ip = "1.1.1.1"
 
 domains = [
     "testdomain.com",
