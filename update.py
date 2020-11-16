@@ -1,8 +1,10 @@
+#!/bin/bash
+
 # michaelpeterswa
 # Route53 Updater, v1.0
 # 11.14.20
 
-from toml import load
+import toml
 import requests
 import boto3
 from tabulate import tabulate
@@ -16,19 +18,25 @@ LIVE = True
 FANCY = True
 VERBOSE = True
 
-data = load("domains.toml")
+data = toml.load("domains.toml")
 client = boto3.client("route53")
 resp = client.list_hosted_zones()
+ip = requests.get(AWS_IP_SERVICE).text.strip()
+
+names = []
+ids = []
+records = []
+matches = []
 
 
 def title(fancy):
     if fancy:
         f = Figlet(font="slant")
         print(f.renderText("R53 U"), end="")
-        print(datetime.now().isoformat() + "\n")
+        print(datetime.now().isoformat())
     else:
-        print("Route53 Updater, by michaelpeterswa")
-        print(datetime.now().isoformat() + "\n")
+        print("\nRoute53 Updater, by michaelpeterswa")
+        print(datetime.now().isoformat())
 
 
 def green(text):
@@ -91,43 +99,67 @@ def update_record(zone_id, name, ip):
     return response
 
 
-names = []
-ids = []
-records = []
-for z in resp["HostedZones"]:
-    names.append(z["Name"][:-1])  # trim trailing .
-    ids.append(z["Id"])
-    records.append((z["Name"][:-1], z["Id"]))
+def groupHostedZones():
+    for z in resp["HostedZones"]:
+        names.append(z["Name"][:-1])  # trim trailing .
+        ids.append(z["Id"])
+        records.append((z["Name"][:-1], z["Id"]))
 
-yellow("")
-title(FANCY)
 
-if VERBOSE:
+def printTitle():
+    if COLORS:
+        print(Fore.YELLOW)
+    title(FANCY)
+
+
+def printRoute53Records():
+    yellow("")
     print("Route53 Records:\n")
     print(tabulate({"Name": names, "ID": ids}, headers="keys"))
     reset()
 
-ip = requests.get(AWS_IP_SERVICE).text.strip()
 
-matches = []
-for link, ID in records:
-    if link in data["domains"]:
-        matches.append((link, ID))
-        if VERBOSE:
+def generateRoute53Matches():
+    for link, ID in records:
+        if link in data["domains"]:
+            matches.append((link, ID))
+
+
+def printRoute53Matches():
+    for link, ID in records:
+        if link in data["domains"]:
             green("✔ found domain match: " + link)
-    else:
-        if VERBOSE:
+        else:
             red("✗ " + link + " was found on Route53 but not in domains")
-if VERBOSE:
-    print()
-
-for match in matches:
-    if LIVE:
-        resp = update_record(match[1], match[0], ip)
-        if VERBOSE:
-            if resp["ChangeInfo"]["Status"] == "PENDING":
-                yellow("PENDING (" + ip + "): " + match[0])
-            else:
-                pass
-if VERBOSE:
     reset()
+
+
+def updateMatchesOnRoute53():
+    for match in matches:
+        r53response = update_record(match[1], match[0], ip)
+    return r53response
+
+
+def printUpdatesOnRoute53(r53response):
+    for match in matches:
+        if r53response["ChangeInfo"]["Status"] == "PENDING":
+            yellow("PENDING (" + ip + "): " + match[0])
+        else:
+            pass
+    reset()
+
+
+if __name__ == "__main__":
+    printTitle()
+    groupHostedZones()
+    generateRoute53Matches()
+    if VERBOSE:
+        printRoute53Records()
+        printRoute53Matches()
+    else:
+        print()
+
+    if LIVE:
+        printUpdatesOnRoute53(updateMatchesOnRoute53())
+    else:
+        print("testing mode")
